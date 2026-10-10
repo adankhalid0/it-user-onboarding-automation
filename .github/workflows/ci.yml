@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Lint with PSScriptAnalyzer
+        shell: powershell
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          # Write-Host is used on purpose for console output. ConvertTo-SecureString -AsPlainText is
+          # needed to set a generated temporary password on a new local account.
+          $results = Invoke-ScriptAnalyzer -Path .\scripts -Recurse -ExcludeRule PSAvoidUsingWriteHost, PSAvoidUsingConvertToSecureStringWithPlainText
+          $results | Format-Table RuleName, Severity, ScriptName, Line, Message -AutoSize
+          if ($results | Where-Object { $_.Severity -eq 'Error' }) { exit 1 }
+
+      - name: Dry run
+        shell: powershell
+        run: .\scripts\New-UserOnboarding.ps1 -WhatIf
+
+      - name: End-to-end test (create, report, disable, clean up)
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          .\scripts\New-UserOnboarding.ps1
+
+          $users = @(Get-LocalUser | Where-Object { $_.Name -like 'demo-*' })
+          if ($users.Count -ne 5) { throw "Expected 5 demo users, found $($users.Count)" }
+          $groups = @(Get-LocalGroup | Where-Object { $_.Name -like 'demo-*' })
+          if ($groups.Count -ne 4) { throw "Expected 4 demo groups, found $($groups.Count)" }
+          $sales = @(Get-LocalGroupMember -Group demo-Sales)
+          if ($sales.Count -ne 2) { throw "Expected 2 members in demo-Sales, found $($sales.Count)" }
+
+          .\scripts\Get-InactiveAccounts.ps1 -Days 0
+          .\scripts\Get-InactiveAccounts.ps1 -Days 0 -DisableInactive
+
+          $enabled = @(Get-LocalUser | Where-Object { $_.Name -like 'demo-*' -and $_.Enabled })
+          if ($enabled.Count -ne 0) { throw "Expected all demo users to be disabled, found $($enabled.Count) enabled" }
+
+          .\scripts\Remove-DemoUsers.ps1 -Force
+
+          $left = @(Get-LocalUser | Where-Object { $_.Name -like 'demo-*' })
+          if ($left.Count -ne 0) { throw "Demo users were not removed: $($left.Count) left" }
+          Write-Host 'End-to-end test passed.'

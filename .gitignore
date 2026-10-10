@@ -1,0 +1,3 @@
+# Output from the scripts: logs, reports and temporary passwords
+output/
+*.log

@@ -21,13 +21,13 @@ The scripts change real accounts on the machine they run on, so they are built t
 - Everything that is created gets the prefix `demo-` (users such as `demo-ahansen`, groups such as `demo-IT`). Cleanup only touches objects with that prefix.
 - `-WhatIf` gives a dry run for every script. It shows what would happen without changing anything.
 - A real run needs an elevated PowerShell and stops with a clear message otherwise.
-- `Remove-DemoUsers.ps1` refuses prefixes shorter than 5 characters, and `Get-InactiveAccounts.ps1 -DisableInactive` refuses an empty prefix, so they cannot be pointed at real accounts by accident.
+- `Remove-DemoUsers.ps1` refuses prefixes shorter than 5 characters, and `Get-InactiveAccounts.ps1 -DisableInactive` refuses prefixes shorter than 3 characters, so they cannot be pointed at real accounts by accident.
 - Passwords are generated at runtime (16 characters, cryptographically random), must be changed at first logon, and are written only to the `output/` folder, which is ignored by git. No passwords are stored in the repository.
 
 ## Requirements
 
 - Windows 10 or 11
-- Windows PowerShell 5.1 or PowerShell 7
+- Windows PowerShell 5.1 (the version the CI pipeline tests with)
 - An elevated (administrator) PowerShell for real runs. Dry runs work without.
 
 ## Usage
@@ -41,13 +41,15 @@ Open PowerShell in the repository folder.
 # 2. Real run (elevated PowerShell)
 .\scripts\New-UserOnboarding.ps1
 
-# 3. Check which accounts are inactive (-Days 0 treats every account that has not logged in as inactive)
+# 3. Check which demo accounts are inactive (-Days 0 treats every account that has not logged in as inactive).
+#    Only accounts that start with -Prefix (default: demo-) are included.
 .\scripts\Get-InactiveAccounts.ps1 -Days 0
 
 # 4. See which accounts would be disabled, without disabling them
 .\scripts\Get-InactiveAccounts.ps1 -Days 0 -DisableInactive -WhatIf
 
-# 5. Clean up the demo accounts again
+# 5. See what the cleanup would remove, then clean up the demo accounts again
+.\scripts\Remove-DemoUsers.ps1 -WhatIf
 .\scripts\Remove-DemoUsers.ps1 -Force
 ```
 
